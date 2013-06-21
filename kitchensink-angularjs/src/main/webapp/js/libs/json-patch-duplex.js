@@ -1,6 +1,6 @@
 var jsonpatch;
 
-jsonpatch = exports;
+//jsonpatch = exports;
 
 (function (jsonpatch) {
     var objOps = {

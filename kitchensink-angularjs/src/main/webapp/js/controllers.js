@@ -65,4 +65,45 @@ function MembersCtrl($scope, $http, Members) {
 
     // Set the default orderBy to the name property
     $scope.orderBy = 'name';
+
+    $scope.edit = function(member) {
+      $scope.editMember = member;
+      $scope.editMemberObserver = jsonpatch.observe(member);
+    }
+
+    $scope.resetEdit = function(member) {
+      $scope.editMember = {};
+    }
+
+    $scope.resetEdit();
+
+  //TODO: deal w/ copy/paste violations
+
+    $scope.update = function() {
+      $scope.successMessages = '';
+      $scope.errorMessages = '';
+      $scope.errors = {};
+
+      var diff = jsonpatch.generate($scope.editMemberObserver);
+
+      var diffResource = new Members({"diff": diff});
+      Members.update({memberId: $scope.editMember.id}, diff, function(data) {
+
+        // mark success on the registration form
+        $scope.successMessages = [ 'Member Updated' ];
+
+        // Update the list of members
+        //$scope.refresh();
+
+        // Clear the form
+        $scope.resetEdit();
+      }, function(result) {
+        if ((result.status == 409) || (result.status == 400)) {
+          $scope.errors = result.data;
+        } else {
+          $scope.errorMessages = [ 'Unknown  server error' ];
+        }
+        $scope.$apply();
+      });
+    }
 }
