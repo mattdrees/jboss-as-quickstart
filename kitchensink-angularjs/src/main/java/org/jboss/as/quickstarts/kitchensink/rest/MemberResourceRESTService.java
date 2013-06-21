@@ -119,6 +119,16 @@ public class MemberResourceRESTService {
         return builder.build();
     }
 
+
+    @PATCH
+//    @Consumes(MediaType.APPLICATION_JSON)
+//    @Produces(MediaType.APPLICATION_JSON)
+    @Path("/{id:[0-9][0-9]*}")
+    public Response patchMember(@PathParam("id") long id, String jsonPatchLiteral) {
+      log.info("received patch for member " + id + ": \n" + jsonPatchLiteral);
+      return Response.ok().build();
+    }
+
     /**
      * <p>
      * Validates the given Member variable and throws validation exceptions based on the type of error. If the error is standard
