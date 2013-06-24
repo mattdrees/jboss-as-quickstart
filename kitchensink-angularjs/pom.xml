@@ -136,6 +136,13 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- needed by Arquillian tests for transaction management -->
+        <dependency>
+            <groupId>org.jboss.spec.javax.transaction</groupId>
+            <artifactId>jboss-transaction-api_1.1_spec</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Import the EJB API, we use provided scope as the API is included in JBoss AS 7 -->
         <dependency>
             <groupId>org.jboss.spec.javax.ejb</groupId>
