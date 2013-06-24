@@ -42,4 +42,9 @@ public class MemberRegistration {
         em.persist(member);
         memberEventSrc.fire(member);
     }
+
+    public Member update(Member member) {
+        log.info("Updating " + member.getName());
+        return em.merge(member);
+    }
 }
