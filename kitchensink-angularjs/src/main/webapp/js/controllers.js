@@ -86,7 +86,6 @@ function MembersCtrl($scope, $http, Members) {
 
       var diff = jsonpatch.generate($scope.editMemberObserver);
 
-      var diffResource = new Members({"diff": diff});
       Members.update({memberId: $scope.editMember.id}, diff, function(data) {
 
         // mark success on the registration form
