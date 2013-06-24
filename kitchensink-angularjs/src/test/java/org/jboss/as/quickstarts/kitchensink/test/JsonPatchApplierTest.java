@@ -73,78 +73,36 @@ public class JsonPatchApplierTest {
     JsonPatchApplier jsonPatchApplier;
 
     @Inject
-    EntityManager em;
-
-    @Inject
-    UserTransaction utx;
-
-    @Inject
     Logger log;
 
-    private Long id;
 
-    @Before
-    public void setup() throws Exception {
-        setupTransaction();
+    public Member createJane(){
         Member member = new Member();
         member.setName("Jane Doe");
         member.setEmail("jane@mailinator.com");
         member.setPhoneNumber("2125551234");
-        em.persist(member);
-        this.id = member.getId();
-        finishTransaction();
+        return member;
     }
 
-
-    @After
-    public void cleanup() throws Exception {
-        setupTransaction();
-        try {
-            if (id != null)
-            {
-                Member member = null;
-                try {
-                    member = em.find(Member.class, id);
-                } catch (EntityNotFoundException e) {
-                    return;
-                }
-                em.remove(member);
-            }
-        } finally {
-            id = null;
-            finishTransaction();
-        }
-    }
-
-
+    Member member = createJane();
 
     @Test
     public void testPatchApplicationWhenNameUpdateIsSuccessful() throws Exception {
-
-        setupTransaction();
-
         String patch =
                 "[{" +
                 "\"op\": \"replace\", " +
                 "\"path\": \"/name\"," +
                 "\"value\": \"Jenny Doe\"" +
                 "}]";
-        Member member = em.find(Member.class, id);
 
         Member updatedMember = jsonPatchApplier.applyJsonPatch(patch, member);
 
         assertEquals("Jenny Doe", updatedMember.getName());
-        finishTransaction();
     }
 
     @Test
     public void testPatchApplicationWhenPatchDoesNotParse() throws Exception {
-
-        setupTransaction();
-
-        String patch =
-                "garbage";
-        Member member = em.find(Member.class, id);
+        String patch = "garbage";
 
         try {
             Member updatedMember = jsonPatchApplier.applyJsonPatch(patch, member);
@@ -155,18 +113,12 @@ public class JsonPatchApplierTest {
             assertEquals(400, e.getResponse().getStatus());
             log.fine(e.getResponse().getEntity().toString());
         }
-
-        finishTransaction();
     }
 
     @Test
     public void testPatchApplicationWhenPatchIsJsonButNotJsonPatch() throws Exception {
-
-        setupTransaction();
-
         String patch =
                 "[{\"foo\": \"bar\"}]";
-        Member member = em.find(Member.class, id);
 
         try {
             Member updatedMember = jsonPatchApplier.applyJsonPatch(patch, member);
@@ -177,14 +129,10 @@ public class JsonPatchApplierTest {
             assertEquals(400, e.getResponse().getStatus());
             log.info(e.getResponse().getEntity().toString());
         }
-
-        finishTransaction();
     }
 
     @Test
     public void testPatchApplicationWhenPatchIsValidJsonPatchButPatchErrors() throws Exception {
-
-        setupTransaction();
 
         String patch =
                 "[{" +
@@ -192,7 +140,6 @@ public class JsonPatchApplierTest {
                 "\"path\": \"/notARealPath\"," +
                 "\"value\": \"something\"" +
                 "}]";
-        Member member = em.find(Member.class, id);
 
         try {
             Member updatedMember = jsonPatchApplier.applyJsonPatch(patch, member);
@@ -203,15 +150,11 @@ public class JsonPatchApplierTest {
             assertEquals(409, e.getResponse().getStatus());
             log.fine(e.getResponse().getEntity().toString());
         }
-
-        finishTransaction();
     }
 
 
     @Test
     public void testPatchApplicationWhenPatchIsValidJsonPatchWithoutConflictButResultIsNotAValidEntity() throws Exception {
-
-        setupTransaction();
 
         String patch =
                 "[{" +
@@ -219,7 +162,6 @@ public class JsonPatchApplierTest {
                         "\"path\": \"/anUnsupportedAttribute\"," +
                         "\"value\": \"something\"" +
                         "}]";
-        Member member = em.find(Member.class, id);
 
         try {
             Member updatedMember = jsonPatchApplier.applyJsonPatch(patch, member);
@@ -230,21 +172,6 @@ public class JsonPatchApplierTest {
             assertEquals(422, e.getResponse().getStatus());
             log.fine(e.getResponse().getEntity().toString());
         }
-
-        finishTransaction();
     }
 
-
-
-
-    private void finishTransaction() throws RollbackException, HeuristicMixedException, HeuristicRollbackException, SystemException {
-        em.flush();
-        em.clear();
-        utx.commit();
-    }
-
-    private void setupTransaction() throws NotSupportedException, SystemException {
-        utx.begin();
-        em.joinTransaction();
-    }
 }
