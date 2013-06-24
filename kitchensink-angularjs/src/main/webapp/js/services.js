@@ -24,7 +24,8 @@ angular.module('membersService', ['ngResource']).
     {
       update: {
         method: "PATCH",
-        isArray: true
+        isArray: true,
+        headers:{'Content-Type':'application/json-patch'}
       }
     }
   );
