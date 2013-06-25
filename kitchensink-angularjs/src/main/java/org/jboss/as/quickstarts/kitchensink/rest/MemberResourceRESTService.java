@@ -94,17 +94,30 @@ public class MemberResourceRESTService {
     @Produces(MediaType.APPLICATION_JSON)
     public Response createMember(Member member) {
 
+        Response.ResponseBuilder builder = validateMemberAndHandleExceptions(member);
+
+        if (builder != null)
+            return builder.build();
+        try
+        {
+            registration.register(member);
+            // Create an "ok" response
+            builder = Response.ok();
+        }
+        catch (Exception e) {
+            builder = handleServerException(e);
+        }
+
+        return builder.build();
+    }
+
+    private Response.ResponseBuilder validateMemberAndHandleExceptions(Member member) {
         Response.ResponseBuilder builder = null;
 
         try {
             // Validates member using bean validation
             validateMember(member);
-            validateEmailAddressUniqueness(member);
-
-            registration.register(member);
-
-            // Create an "ok" response
-            builder = Response.ok();
+            builder = null;
         } catch (ConstraintViolationException ce) {
             // Handle bean validation issues
             builder = createViolationResponse(ce.getConstraintViolations());
@@ -113,14 +126,16 @@ public class MemberResourceRESTService {
             Map<String, String> responseObj = new HashMap<String, String>();
             responseObj.put("email", "Email taken");
             builder = Response.status(Response.Status.CONFLICT).entity(responseObj);
-        } catch (Exception e) {
-            // Handle generic exceptions
-            Map<String, String> responseObj = new HashMap<String, String>();
-            responseObj.put("error", e.getMessage());
-            builder = Response.status(Response.Status.BAD_REQUEST).entity(responseObj);
         }
+        return builder;
+    }
 
-        return builder.build();
+    private Response.ResponseBuilder handleServerException(Exception e) {
+        Response.ResponseBuilder builder;// Handle generic exceptions
+        Map<String, String> responseObj = new HashMap<String, String>();
+        responseObj.put("error", e.getMessage());
+        builder = Response.status(Response.Status.BAD_REQUEST).entity(responseObj);
+        return builder;
     }
 
 
@@ -130,35 +145,20 @@ public class MemberResourceRESTService {
     public Response patchMember(@PathParam("id") long id, String jsonPatchLiteral) {
       log.info("received patch for member " + id + ": \n" + jsonPatchLiteral);
         Member originalMember = lookupMemberById(id);
-        String originalEmail = originalMember.getEmail();
         Member updatedMember = jsonPatchApplier.applyJsonPatch(jsonPatchLiteral, originalMember);
-        String updatedEmail = updatedMember.getEmail();
 
-        Response.ResponseBuilder builder;
-        try {
-            // Validates member using bean validation
-            validateMember(updatedMember);
-            if (!originalEmail.equals(updatedEmail))
-            {
-                validateEmailAddressUniqueness(updatedMember);
-            }
+        Response.ResponseBuilder builder = validateMemberAndHandleExceptions(updatedMember);
 
+        if (builder != null)
+            return builder.build();
+        try
+        {
             registration.update(updatedMember);
-
+            // Create an "ok" response
             builder = Response.status(Response.Status.NO_CONTENT);
-        } catch (ConstraintViolationException ce) {
-            // Handle bean validation issues
-            builder = createViolationResponse(ce.getConstraintViolations());
-        } catch (ValidationException e) {
-            // Handle the unique constrain violation
-            Map<String, String> responseObj = new HashMap<String, String>();
-            responseObj.put("email", "Email taken");
-            builder = Response.status(Response.Status.CONFLICT).entity(responseObj);
-        } catch (Exception e) {
-            // Handle generic exceptions
-            Map<String, String> responseObj = new HashMap<String, String>();
-            responseObj.put("error", e.getMessage());
-            builder = Response.status(Response.Status.BAD_REQUEST).entity(responseObj);
+        }
+        catch (Exception e) {
+            builder = handleServerException(e);
         }
 
         return builder.build();
@@ -166,12 +166,17 @@ public class MemberResourceRESTService {
 
     /**
      * <p>
-     * Validates the given Member variable and throws a ConstraintValidationException with the set of the constraints violated,
-     * if there are any.
+     * Validates the given Member variable and throws validation exceptions based on the type of error. If the error is standard
+     * bean validation errors then it will throw a ConstraintValidationException with the set of the constraints violated.
      * </p>
-     *
+     * <p>
+     * If the error is caused because an existing member with the same email is registered it throws a regular validation
+     * exception so that it can be interpreted separately.
+     * </p>
+     * 
      * @param member Member to be validated
      * @throws ConstraintViolationException If Bean Validation errors exist
+     * @throws ValidationException If member with the same email already exists
      */
     private void validateMember(Member member) throws ConstraintViolationException, ValidationException {
         // Create a bean validator and check for issues.
@@ -180,19 +185,9 @@ public class MemberResourceRESTService {
         if (!violations.isEmpty()) {
             throw new ConstraintViolationException(new HashSet<ConstraintViolation<?>>(violations));
         }
-    }
 
-    /**
-     * <p>
-     * Validates the given Member's email address is not already taken..
-     * If an existing member with the same email is registered it throws a regular validation exception.
-     * </p>
-     *
-     * @param member Member to be validated
-     * @throws ValidationException If member with the same email already exists
-     */
-    private void validateEmailAddressUniqueness(Member member) {
-        if (emailAlreadyExists(member.getEmail())) {
+        // Check the uniqueness of the email address
+        if (emailAlreadyExists(member.getId(), member.getEmail())) {
             throw new ValidationException("Unique Email Violation");
         }
     }
@@ -220,16 +215,22 @@ public class MemberResourceRESTService {
      * Checks if a member with the same email address is already registered. This is the only way to easily capture the
      * "@UniqueConstraint(columnNames = "email")" constraint from the Member class.
      * 
+     *
+     * @param newMemberId
      * @param email The email to check
      * @return True if the email already exists, and false otherwise
      */
-    public boolean emailAlreadyExists(String email) {
+    public boolean emailAlreadyExists(Long newMemberId, String email) {
         Member member = null;
         try {
             member = repository.findByEmail(email);
         } catch (NoResultException e) {
             // ignore
         }
-        return member != null;
+        if (member != null)
+        {
+            return newMemberId == null || !newMemberId.equals(member.getId());
+        }
+        return false;
     }
 }

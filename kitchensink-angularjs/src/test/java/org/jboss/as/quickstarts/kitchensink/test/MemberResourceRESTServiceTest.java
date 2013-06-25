@@ -152,6 +152,47 @@ public class MemberResourceRESTServiceTest {
 
 
     @Test
+    public void testRegistrationForNewPersonSuccessful() throws Exception {
+        Member newMember = new Member();
+        newMember.setName("Sam Doe");
+        newMember.setEmail("sam@mailinator.com");
+        newMember.setPhoneNumber("5253555555");
+
+        Response response = service.createMember(newMember);
+
+        assertEquals(200, response.getStatus());
+
+        setupTransaction();
+        Member member = em
+            .createQuery("from Member where email = :email", Member.class)
+            .setParameter("email", "sam@mailinator.com")
+            .getSingleResult();
+        assertEquals("Sam Doe", member.getName());
+        finishTransaction();
+    }
+
+    @Test
+    public void testRegistrationWhenEmailIsTaken() throws Exception {
+        Member newMember = new Member();
+        newMember.setName("Sam Doe");
+        newMember.setEmail("john@mailinator.com");
+        newMember.setPhoneNumber("5253555555");
+
+        Response response = service.createMember(newMember);
+
+        assertEquals(409, response.getStatus());
+
+        setupTransaction();
+        Member member = em
+            .createQuery("from Member where email = :email", Member.class)
+            .setParameter("email", "john@mailinator.com")
+            .getSingleResult();
+        assertEquals("John Doe", member.getName());
+        finishTransaction();
+    }
+
+
+    @Test
     public void testPatchApplicationWhenNameUpdateIsSuccessful() throws Exception {
         String patch =
                 "[{" +
