@@ -111,6 +111,31 @@ public class MemberResourceRESTService {
         return builder.build();
     }
 
+    @PATCH
+    @Consumes("application/json-patch")
+    @Path("/{id:[0-9][0-9]*}")
+    public Response patchMember(@PathParam("id") long id, String jsonPatchLiteral) {
+      log.info("received patch for member " + id + ": \n" + jsonPatchLiteral);
+        Member originalMember = lookupMemberById(id);
+        Member updatedMember = jsonPatchApplier.applyJsonPatch(jsonPatchLiteral, originalMember);
+
+        Response.ResponseBuilder builder = validateMemberAndHandleExceptions(updatedMember);
+
+        if (builder != null)
+            return builder.build();
+        try
+        {
+            registration.update(updatedMember);
+            // Create an "ok" response
+            builder = Response.status(Response.Status.NO_CONTENT);
+        }
+        catch (Exception e) {
+            builder = handleServerException(e);
+        }
+
+        return builder.build();
+    }
+
     private Response.ResponseBuilder validateMemberAndHandleExceptions(Member member) {
         Response.ResponseBuilder builder = null;
 
@@ -136,32 +161,6 @@ public class MemberResourceRESTService {
         responseObj.put("error", e.getMessage());
         builder = Response.status(Response.Status.BAD_REQUEST).entity(responseObj);
         return builder;
-    }
-
-
-    @PATCH
-    @Consumes("application/json-patch")
-    @Path("/{id:[0-9][0-9]*}")
-    public Response patchMember(@PathParam("id") long id, String jsonPatchLiteral) {
-      log.info("received patch for member " + id + ": \n" + jsonPatchLiteral);
-        Member originalMember = lookupMemberById(id);
-        Member updatedMember = jsonPatchApplier.applyJsonPatch(jsonPatchLiteral, originalMember);
-
-        Response.ResponseBuilder builder = validateMemberAndHandleExceptions(updatedMember);
-
-        if (builder != null)
-            return builder.build();
-        try
-        {
-            registration.update(updatedMember);
-            // Create an "ok" response
-            builder = Response.status(Response.Status.NO_CONTENT);
-        }
-        catch (Exception e) {
-            builder = handleServerException(e);
-        }
-
-        return builder.build();
     }
 
     /**
