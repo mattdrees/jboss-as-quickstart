@@ -18,12 +18,22 @@ package org.jboss.as.quickstarts.kitchensink.test;
 
 import com.google.common.collect.Iterables;
 import org.jboss.arquillian.container.test.api.Deployment;
+import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.junit.Arquillian;
+import org.jboss.arquillian.test.api.ArquillianResource;
 import org.jboss.as.quickstarts.kitchensink.data.MemberRepository;
 import org.jboss.as.quickstarts.kitchensink.model.Member;
-import org.jboss.as.quickstarts.kitchensink.rest.*;
+import org.jboss.as.quickstarts.kitchensink.rest.JaxRsActivator;
+import org.jboss.as.quickstarts.kitchensink.rest.JsonPatchRequest;
+import org.jboss.as.quickstarts.kitchensink.rest.MemberResourceRESTService;
+import org.jboss.as.quickstarts.kitchensink.rest.PATCH;
 import org.jboss.as.quickstarts.kitchensink.service.MemberRegistration;
 import org.jboss.as.quickstarts.kitchensink.util.Resources;
+import org.jboss.resteasy.client.ClientResponse;
+import org.jboss.resteasy.client.ProxyFactory;
+import org.jboss.resteasy.plugins.providers.RegisterBuiltin;
+import org.jboss.resteasy.spi.ResteasyProviderFactory;
+import org.jboss.resteasy.util.GenericType;
 import org.jboss.shrinkwrap.api.Archive;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.asset.EmptyAsset;
@@ -32,6 +42,7 @@ import org.jboss.shrinkwrap.resolver.api.maven.Maven;
 import org.jboss.shrinkwrap.resolver.api.maven.PomEquippedResolveStage;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -39,16 +50,21 @@ import javax.inject.Inject;
 import javax.persistence.EntityManager;
 import javax.persistence.EntityNotFoundException;
 import javax.transaction.UserTransaction;
-import javax.ws.rs.WebApplicationException;
+import javax.ws.rs.*;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.net.URL;
+import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(Arquillian.class)
-public class MemberResourceRESTServiceTest {
+@RunAsClient
+public class MemberResourceRESTServiceClientTest {
 
     @Deployment
     public static Archive<?> createTestArchive() {
@@ -57,12 +73,13 @@ public class MemberResourceRESTServiceTest {
         
         return ShrinkWrap.create(WebArchive.class, "test.war")
                 .addClasses(
-                    Member.class,
-                    MemberRepository.class,
-                    MemberRegistration.class,
-                    Resources.class)
+                        Member.class,
+                        MemberRepository.class,
+                        MemberRegistration.class,
+                        Resources.class)
                 .addPackage(MemberResourceRESTService.class.getPackage())
                 .addAsResource("META-INF/test-persistence.xml", "META-INF/persistence.xml")
+                .addAsResource("import.sql", "import.sql")
                 .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
                 // Deploy our test datasource
                 .addAsWebInfResource("test-ds.xml")
@@ -72,82 +89,48 @@ public class MemberResourceRESTServiceTest {
                     .asFile());
     }
 
-    @Inject
-    MemberResourceRESTService service;
+    @ArquillianResource
+    URL deploymentUrl;
 
 
-    @Inject
-    EntityManager em;
+    @Path("/members")
+    public static interface MemberResourceRESTServiceClient
+    {
 
-    @Inject
-    UserTransaction utx;
+        @GET
+        @Path("/{id:[0-9][0-9]*}")
+        @Produces(MediaType.APPLICATION_JSON)
+        public ClientResponse<Member> lookupMemberById(@PathParam("id") long id) ;
 
-    @Inject
-    Logger log;
+        @POST
+        @Consumes(MediaType.APPLICATION_JSON)
+        @Produces(MediaType.APPLICATION_JSON)
+        public Response createMember(Member member) ;
 
-    private Long id;
-    private Long id2;
+        @PATCH
+        @Consumes("application/json-patch")
+        @Path("/{id:[0-9][0-9]*}")
+        public Response patchMember(@PathParam("id") long id, String patch) ;
+
+
+        @GET
+        @Produces(MediaType.APPLICATION_JSON)
+        public List<Member> listAllMembers();
+    }
+
+    MemberResourceRESTServiceClient client;
+
+    @BeforeClass
+    public static void initResteasyClient() {
+        RegisterBuiltin.register(ResteasyProviderFactory.getInstance());
+    }
 
     @Before
-    public void setup() throws Exception {
-        setupTransaction();
-        Member member = new Member();
-        member.setName("Jane Doe");
-        member.setEmail("jane@mailinator.com");
-        member.setPhoneNumber("2125551234");
-        em.persist(member);
-        this.id = member.getId();
-
-        Member member2 = new Member();
-        member2.setName("John Doe");
-        member2.setEmail("john@mailinator.com");
-        member2.setPhoneNumber("5551123125");
-        em.persist(member2);
-        this.id2 = member2.getId();
-
-        finishTransaction();
+    public void buildClient()
+    {
+        String restApiBaseUrl = deploymentUrl.toString() + "rest";
+        client = ProxyFactory.create(MemberResourceRESTServiceClient.class, restApiBaseUrl);
     }
-
-    @After
-    public void cleanup() throws Exception {
-        setupTransaction();
-        try {
-            if (id != null)
-            {
-                removeMember(id);
-            }
-            if (id2 != null)
-            {
-                removeMember(id2);
-            }
-        } finally {
-            id = null;
-            id2 = null;
-            finishTransaction();
-        }
-    }
-
-    private void finishTransaction() throws Exception {
-        em.flush();
-        em.clear();
-        utx.commit();
-    }
-
-    private void setupTransaction() throws Exception {
-        utx.begin();
-        em.joinTransaction();
-    }
-
-    private void removeMember(Long id) {
-        Member member;
-        try {
-            member = em.find(Member.class, id);
-        } catch (EntityNotFoundException e) {
-            return;
-        }
-        em.remove(member);
-    }
-
 
     @Test
     public void testRegistrationForNewPersonSuccessful() throws Exception {
@@ -156,42 +139,27 @@ public class MemberResourceRESTServiceTest {
         newMember.setEmail("sam@mailinator.com");
         newMember.setPhoneNumber("5253555555");
 
-        Response response = service.createMember(newMember);
+        Response response = client.createMember(newMember);
 
         assertEquals(200, response.getStatus());
-
-        setupTransaction();
-        Member member = em
-            .createQuery("from Member where email = :email", Member.class)
-            .setParameter("email", "sam@mailinator.com")
-            .getSingleResult();
-        assertEquals("Sam Doe", member.getName());
-        finishTransaction();
     }
 
     @Test
     public void testRegistrationWhenEmailIsTaken() throws Exception {
         Member newMember = new Member();
         newMember.setName("Sam Doe");
-        newMember.setEmail("john@mailinator.com");
+        newMember.setEmail("john.smith@mailinator.com");
         newMember.setPhoneNumber("5253555555");
 
-        Response response = service.createMember(newMember);
+        Response response = client.createMember(newMember);
 
         assertEquals(409, response.getStatus());
-
-        setupTransaction();
-        Member member = em
-            .createQuery("from Member where email = :email", Member.class)
-            .setParameter("email", "john@mailinator.com")
-            .getSingleResult();
-        assertEquals("John Doe", member.getName());
-        finishTransaction();
     }
-
 
     @Test
     public void testPatchApplicationWhenNameUpdateIsSuccessful() throws Exception {
+        Long id = setupJane();
+
         String patch =
                 "[{" +
                 "\"op\": \"replace\", " +
@@ -199,19 +167,59 @@ public class MemberResourceRESTServiceTest {
                 "\"value\": \"Jenny Doe\"" +
                 "}]";
 
-        JsonPatchRequest jsonPatch = buildPatch(patch);
-        Response response = service.patchMember(id, jsonPatch);
+        Response response = client.patchMember(id, patch);
 
         assertEquals(204, response.getStatus());
+    }
 
-        setupTransaction();
-        Member member = em.find(Member.class, id);
-        assertEquals("Jenny Doe", member.getName());
-        finishTransaction();
+    @Test
+    public void testListAllMembers() {
+        List<Member> members = client.listAllMembers();
+        assertFalse(members.isEmpty());
+    }
+
+    @Test
+    public void testGetById() {
+        ClientResponse<Member> response = client.lookupMemberById(0);
+        assertEquals(200, response.getStatus());
+        Member member = response.getEntity();
+        assertEquals(member.getName(), "John Smith");
+    }
+
+    @Test
+    public void testGetByIdWhenDoesNotExist() {
+        ClientResponse<Member> response = client.lookupMemberById(42);
+        assertEquals(404, response.getStatus());
+    }
+
+
+    // work-around for the fact that it's hard to clean up test data
+    static int counter = 0;
+
+    private Long setupJane() {
+        String email = "jane" + counter + "@mailinator.com";
+        counter++;
+        Member newMember = new Member();
+        newMember.setName("Jane Doe");
+        newMember.setEmail(email);
+        newMember.setPhoneNumber("5555555555");
+
+        ClientResponse<?> response = (ClientResponse<?>) client.createMember(newMember);
+        assertEquals(200, response.getStatus());
+        response.releaseConnection();
+
+        List<Member> members = client.listAllMembers();
+        for (Member member : members)
+        {
+            if (member.getEmail().equals(email))
+                return member.getId();
+        }
+        throw new AssertionError("Could not find jane");
     }
 
     @Test
     public void testPatchApplicationWhenNewNameIsInvalid() throws Exception {
+        Long id = setupJane();
         String patch =
                 "[{" +
                 "\"op\": \"replace\", " +
@@ -219,47 +227,37 @@ public class MemberResourceRESTServiceTest {
                 "\"value\": \"Jane Doe 2\"" +
                 "}]";
 
-        JsonPatchRequest jsonPatch = buildPatch(patch);
-        Response response = service.patchMember(id, jsonPatch);
+        ClientResponse<Map<String, String>> response = (ClientResponse<Map<String, String>>) client.patchMember(id, patch);
 
         //note: this should probably instead be 422, but for now I am keeping with 400 to match original project's service
         assertEquals(400, response.getStatus());
-        Map<String, String> errors = (Map<String, String>) response.getEntity();
+        Map<String, String> errors = getErrors(response);
         assertEquals("name", Iterables.getOnlyElement(errors.keySet()));
         assertEquals("Must not contain numbers", errors.get("name"));
-
-        setupTransaction();
-        Member member = em.find(Member.class, id);
-        assertEquals("Jane Doe", member.getName());
-        finishTransaction();
     }
 
     @Test
     public void testPatchApplicationWhenNewEmailIsTaken() throws Exception {
+        Long id = setupJane();
         String patch =
                 "[{" +
                 "\"op\": \"replace\", " +
                 "\"path\": \"/email\"," +
-                "\"value\": \"john@mailinator.com\"" +
+                "\"value\": \"john.smith@mailinator.com\"" +
                 "}]";
 
-        JsonPatchRequest jsonPatch = buildPatch(patch);
-        Response response = service.patchMember(id, jsonPatch);
+        ClientResponse<Map<String, String>> response = (ClientResponse<Map<String, String>>) client.patchMember(id, patch);
 
         //note: this should probably instead be 422, but for now I am keeping with 400 to match original project's service
         assertEquals(409, response.getStatus());
-        Map<String, String> errors = (Map<String, String>) response.getEntity();
+        Map<String, String> errors = getErrors(response);
         assertEquals("email", Iterables.getOnlyElement(errors.keySet()));
         assertEquals("Email taken", errors.get("email"));
-
-        setupTransaction();
-        Member member = em.find(Member.class, id);
-        assertEquals("jane@mailinator.com", member.getEmail());
-        finishTransaction();
     }
 
-    private JsonPatchRequest buildPatch(String patchAsString) {
-        return new JsonPatchRequestReader().buildJsonPatchRequest(patchAsString);
+    private Map<String, String> getErrors(ClientResponse<Map<String, String>> response) {
+        return response.getEntity(new GenericType<Map<String, String>>(){});
     }
+
 
 }

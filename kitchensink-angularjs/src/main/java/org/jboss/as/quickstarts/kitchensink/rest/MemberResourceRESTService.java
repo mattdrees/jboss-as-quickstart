@@ -65,9 +65,6 @@ public class MemberResourceRESTService {
     @Inject
     MemberRegistration registration;
 
-    @Inject
-    JsonPatchApplier jsonPatchApplier;
-
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     public List<Member> listAllMembers() {
@@ -114,10 +111,10 @@ public class MemberResourceRESTService {
     @PATCH
     @Consumes("application/json-patch")
     @Path("/{id:[0-9][0-9]*}")
-    public Response patchMember(@PathParam("id") long id, String jsonPatchLiteral) {
-      log.info("received patch for member " + id + ": \n" + jsonPatchLiteral);
+    public Response patchMember(@PathParam("id") long id, JsonPatchRequest patch) {
+        log.info("received patch for member " + id + ": \n" + patch);
         Member originalMember = lookupMemberById(id);
-        Member updatedMember = jsonPatchApplier.applyJsonPatch(jsonPatchLiteral, originalMember);
+        Member updatedMember = patch.apply(originalMember);
 
         Response.ResponseBuilder builder = validateMemberAndHandleExceptions(updatedMember);
 

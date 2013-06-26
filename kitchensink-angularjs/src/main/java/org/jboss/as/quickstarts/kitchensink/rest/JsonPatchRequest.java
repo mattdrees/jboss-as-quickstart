@@ -1,19 +1,13 @@
 package org.jboss.as.quickstarts.kitchensink.rest;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.fge.jackson.JacksonUtils;
 import com.github.fge.jackson.JsonLoader;
 import com.github.fge.jsonpatch.JsonPatch;
 import com.github.fge.jsonpatch.JsonPatchException;
 import com.google.common.base.Preconditions;
 
-import javax.ejb.ApplicationException;
-import javax.ejb.Stateless;
-import javax.inject.Inject;
-import javax.persistence.EntityManager;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
@@ -23,23 +17,31 @@ import java.util.logging.Logger;
 /**
  * @author Matt Drees
  */
-public class JsonPatchApplier {
+public class JsonPatchRequest {
 
-    @Inject Logger log;
+    final Logger log;
 
-    //TODO: integrate with the the ObjectMapper used by the jax-rs implementation
-    ObjectMapper mapper = new ObjectMapper()
-            .setNodeFactory(JacksonUtils.nodeFactory())
-            .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS);
+    final ObjectMapper mapper;
 
-    public <T> T applyJsonPatch(String jsonPatchText, T originalEntity)
-    {
+    final JsonPatch jsonPatch;
+
+    public JsonPatchRequest(Logger log, ObjectMapper mapper, String jsonPatchText) {
         Preconditions.checkNotNull(jsonPatchText);
+        this.log = log;
+        this.mapper = mapper;
+        this.jsonPatch = parseAndBuildPatch(jsonPatchText);
+    }
+
+    public <T> T apply(T originalEntity) {
         Preconditions.checkNotNull(originalEntity);
 
-        JsonPatch jsonPatch = parseAndBuildPatch(jsonPatchText);
-        T updatedEntity = applyPatchToEntity(jsonPatchText, originalEntity, jsonPatch);
-        return updatedEntity;
+        JsonNode entityAsJson = mapper.valueToTree(originalEntity);
+        JsonNode updatedEntityAsJson = applyPatch(jsonPatch, entityAsJson);
+
+        // This is safe enough
+        @SuppressWarnings("unchecked")
+        Class<T> entityClass = (Class<T>) originalEntity.getClass();
+        return convertUpdatedJsonBackToEntity(entityClass, updatedEntityAsJson);
     }
 
     private JsonPatch parseAndBuildPatch(String jsonPatchText) {
@@ -84,22 +86,12 @@ public class JsonPatchApplier {
                 .build());
     }
 
-    private <T> T applyPatchToEntity(String jsonPatchText, T originalEntity, JsonPatch jsonPatch) {
-        JsonNode entityAsJson = mapper.valueToTree(originalEntity);
-        JsonNode updatedEntityAsJson = applyPatch(jsonPatchText, jsonPatch, entityAsJson);
-
-        // This is safe enough
-        @SuppressWarnings("unchecked")
-        Class<T> entityClass = (Class<T>) originalEntity.getClass();
-        return convertUpdatedJsonBackToEntity(entityClass, updatedEntityAsJson);
-    }
-
-    private JsonNode applyPatch(String jsonPatchText, JsonPatch jsonPatch, JsonNode entityAsJson) {
+    private JsonNode applyPatch(JsonPatch jsonPatch, JsonNode entityAsJson) {
         JsonNode updatedEntityAsJson;
         try {
             updatedEntityAsJson = jsonPatch.apply(entityAsJson);
         } catch (JsonPatchException e) {
-            log.fine("cannot apply json patch:\n" + jsonPatchText + "\n to:\n" + entityAsJson);
+            log.fine("cannot apply json patch:\n" + jsonPatch + "\n to:\n" + entityAsJson);
             String documentPrintedNicely = nicelyPrintDocumentForErrorMessage(entityAsJson);
             throw new WebApplicationException(
                 e,
@@ -141,5 +133,8 @@ public class JsonPatchApplier {
         return updatedEntity;
     }
 
-
+    @Override
+    public String toString() {
+        return jsonPatch.toString();
+    }
 }

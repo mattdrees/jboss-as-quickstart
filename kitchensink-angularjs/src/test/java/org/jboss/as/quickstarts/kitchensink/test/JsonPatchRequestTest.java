@@ -19,7 +19,8 @@ package org.jboss.as.quickstarts.kitchensink.test;
 import org.jboss.arquillian.container.test.api.Deployment;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.as.quickstarts.kitchensink.model.Member;
-import org.jboss.as.quickstarts.kitchensink.rest.JsonPatchApplier;
+import org.jboss.as.quickstarts.kitchensink.rest.JsonPatchRequest;
+import org.jboss.as.quickstarts.kitchensink.rest.JsonPatchRequestReader;
 import org.jboss.as.quickstarts.kitchensink.rest.UnprocessableEntityStatusType;
 import org.jboss.as.quickstarts.kitchensink.util.Resources;
 import org.jboss.shrinkwrap.api.Archive;
@@ -45,7 +46,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 @RunWith(Arquillian.class)
-public class JsonPatchApplierTest {
+public class JsonPatchRequestTest {
 
     @Deployment
     public static Archive<?> createTestArchive() {
@@ -56,25 +57,19 @@ public class JsonPatchApplierTest {
         return ShrinkWrap.create(WebArchive.class, "test.war")
                 .addClasses(
                     Member.class,
-                    JsonPatchApplier.class,
-                    UnprocessableEntityStatusType.class,
-                    Resources.class)
-                .addAsResource("META-INF/test-persistence.xml", "META-INF/persistence.xml")
-                .addAsWebInfResource(EmptyAsset.INSTANCE, "beans.xml")
+                    JsonPatchRequest.class,
+                    JsonPatchRequestReader.class,
+                    UnprocessableEntityStatusType.class)
                 // Deploy our test datasource
-                .addAsWebInfResource("test-ds.xml")
                 .addAsLibraries(resolver
                     .resolve("com.github.fge:json-patch")
                     .withTransitivity()
                     .asFile());
     }
 
-    @Inject
-    JsonPatchApplier jsonPatchApplier;
+    Logger log = Logger.getLogger(getClass().getName());
 
-    @Inject
-    Logger log;
-
+    JsonPatchRequestReader reader = new JsonPatchRequestReader();
 
     public Member createJane(){
         Member member = new Member();
@@ -95,7 +90,7 @@ public class JsonPatchApplierTest {
                 "\"value\": \"Jenny Doe\"" +
                 "}]";
 
-        Member updatedMember = jsonPatchApplier.applyJsonPatch(patch, member);
+        Member updatedMember = reader.buildJsonPatchRequest(patch).apply(member);
 
         assertEquals("Jenny Doe", updatedMember.getName());
     }
@@ -105,7 +100,7 @@ public class JsonPatchApplierTest {
         String patch = "garbage";
 
         try {
-            Member updatedMember = jsonPatchApplier.applyJsonPatch(patch, member);
+            reader.buildJsonPatchRequest(patch);
             fail("should have thrown exception");
         }
         catch (WebApplicationException e)
@@ -121,7 +116,7 @@ public class JsonPatchApplierTest {
                 "[{\"foo\": \"bar\"}]";
 
         try {
-            Member updatedMember = jsonPatchApplier.applyJsonPatch(patch, member);
+            reader.buildJsonPatchRequest(patch);
             fail("should have thrown exception");
         }
         catch (WebApplicationException e)
@@ -141,8 +136,9 @@ public class JsonPatchApplierTest {
                 "\"value\": \"something\"" +
                 "}]";
 
+        JsonPatchRequest request = reader.buildJsonPatchRequest(patch);
         try {
-            Member updatedMember = jsonPatchApplier.applyJsonPatch(patch, member);
+            request.apply(member);
             fail("should have thrown exception");
         }
         catch (WebApplicationException e)
@@ -163,8 +159,9 @@ public class JsonPatchApplierTest {
                         "\"value\": \"something\"" +
                         "}]";
 
+        JsonPatchRequest request = reader.buildJsonPatchRequest(patch);
         try {
-            Member updatedMember = jsonPatchApplier.applyJsonPatch(patch, member);
+            request.apply(member);
             fail("should have thrown exception");
         }
         catch (WebApplicationException e)

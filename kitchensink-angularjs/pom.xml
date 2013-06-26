@@ -212,6 +212,20 @@
             <scope>test</scope>
         </dependency>
 
+        <dependency>
+           <groupId>org.jboss.resteasy</groupId>
+           <artifactId>resteasy-jaxrs</artifactId>
+           <version>2.3.5.Final</version>
+           <scope>test</scope>
+        </dependency>
+
+       <dependency>
+          <groupId>org.jboss.resteasy</groupId>
+          <artifactId>resteasy-jackson-provider</artifactId>
+          <version>2.3.5.Final</version>
+          <scope>test</scope>
+       </dependency>
+
         <!-- new dependencies -->
         <dependency>
             <groupId>com.github.fge</groupId>
