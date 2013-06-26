@@ -150,7 +150,10 @@ public class MemberResourceRESTService {
             // Handle the unique constrain violation
             Map<String, String> responseObj = new HashMap<String, String>();
             responseObj.put("email", "Email taken");
-            builder = Response.status(Response.Status.CONFLICT).entity(responseObj);
+            builder = Response
+                .status(Response.Status.CONFLICT)
+                .entity(responseObj)
+                .type(MediaType.APPLICATION_JSON_TYPE);
         }
         return builder;
     }
@@ -207,7 +210,10 @@ public class MemberResourceRESTService {
             responseObj.put(violation.getPropertyPath().toString(), violation.getMessage());
         }
 
-        return Response.status(Response.Status.BAD_REQUEST).entity(responseObj);
+        return Response
+            .status(Response.Status.BAD_REQUEST)
+            .entity(responseObj)
+            .type(MediaType.APPLICATION_JSON_TYPE);
     }
 
     /**
