@@ -116,6 +116,12 @@ public class MemberResourceRESTServiceClientTest {
         @GET
         @Produces(MediaType.APPLICATION_JSON)
         public List<Member> listAllMembers();
+
+
+        @PUT
+        @Consumes(MediaType.APPLICATION_JSON)
+        @Path("/{id:[0-9][0-9]*}")
+        public Response updateMember(@PathParam("id") long id, Member updatedMember);
     }
 
     MemberResourceRESTServiceClient client;
@@ -180,15 +186,56 @@ public class MemberResourceRESTServiceClientTest {
 
     @Test
     public void testGetById() {
+        Member member = getJohn();
+    }
+
+    @Test
+    public void testUpdateMember() {
+        Member john = getJohn();
+        assertEquals(john.getPhoneNumber(), "2125551212");
+        john.setPhoneNumber("2125551217");
+
+        ClientResponse<?> response = (ClientResponse<?>) client.updateMember(0, john);
+        assertEquals(204, response.getStatus());
+        response.releaseConnection();
+        Member updatedJohn = getJohn();
+        assertEquals(john.getPhoneNumber(), "2125551217");
+    }
+
+    @Test
+    public void testUpdateMemberIdFails() {
+        Member john = getJohn();
+        john.setId(2L);
+
+        ClientResponse<?> response = (ClientResponse<?>) client.updateMember(0, john);
+        assertEquals(400, response.getStatus());
+    }
+
+    private Member getJohn() {
         ClientResponse<Member> response = client.lookupMemberById(0);
         assertEquals(200, response.getStatus());
         Member member = response.getEntity();
         assertEquals(member.getName(), "John Smith");
+        response.releaseConnection();
+        return member;
     }
+
 
     @Test
     public void testGetByIdWhenDoesNotExist() {
         ClientResponse<Member> response = client.lookupMemberById(42);
+        assertEquals(404, response.getStatus());
+    }
+
+    @Test
+    public void testUpdateMemberFailsWhenDoesNotExist() {
+
+        Member newMember = new Member();
+        newMember.setName("Jimmy Doe");
+        newMember.setEmail("jimmy@mailinator.com");
+        newMember.setPhoneNumber("5253555777");
+
+        ClientResponse<?> response = (ClientResponse<?>) client.updateMember(42, newMember);
         assertEquals(404, response.getStatus());
     }
 

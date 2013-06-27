@@ -33,6 +33,7 @@ import javax.validation.Validator;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
@@ -40,6 +41,7 @@ import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import com.google.common.collect.ImmutableMap;
 import org.jboss.as.quickstarts.kitchensink.data.MemberRepository;
 import org.jboss.as.quickstarts.kitchensink.model.Member;
 import org.jboss.as.quickstarts.kitchensink.service.MemberRegistration;
@@ -76,10 +78,18 @@ public class MemberResourceRESTService {
     @Produces(MediaType.APPLICATION_JSON)
     public Member lookupMemberById(@PathParam("id") long id) {
         Member member = repository.findById(id);
-        if (member == null) {
-            throw new WebApplicationException(Response.Status.NOT_FOUND);
-        }
+        handleNonexistingMember(id, member);
         return member;
+    }
+
+    private void handleNonexistingMember(long id, Member member) {
+        if (member == null) {
+            throw new WebApplicationException(
+                Response
+                    .status(Response.Status.NOT_FOUND)
+                    .entity(ImmutableMap.of("error", "there is no member whose id is " + id))
+                    .build());
+        }
     }
 
     /**
@@ -115,6 +125,17 @@ public class MemberResourceRESTService {
         log.info("received patch for member " + id + ": \n" + patch);
         Member originalMember = lookupMemberById(id);
         Member updatedMember = patch.apply(originalMember);
+        return updateMember(id, updatedMember);
+    }
+
+
+    @PUT
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Path("/{id:[0-9][0-9]*}")
+    public Response updateMember(@PathParam("id") long id, Member updatedMember) {
+        checkExists(id);
+        checkIdPresent(updatedMember);
+        checkIdNotChanged(id, updatedMember);
 
         Response.ResponseBuilder builder = validateMemberAndHandleExceptions(updatedMember);
 
@@ -131,6 +152,38 @@ public class MemberResourceRESTService {
         }
 
         return builder.build();
+    }
+
+    private void checkExists(long id) {
+        if (repository.findById(id) == null)
+            throw new WebApplicationException(
+                Response
+                    .status(Response.Status.NOT_FOUND)
+                    .entity(ImmutableMap.of(
+                            "error", "there is no member whose id is " + id,
+                            "note", "this server only supports PUT for resource updates, not resource creation"))
+                    .build()
+            );
+    }
+
+    private void checkIdPresent(Member updatedMember) {
+        if (updatedMember.getId() == null)
+            throw new WebApplicationException(
+                Response
+                    .status(Response.Status.BAD_REQUEST)
+                    .entity(ImmutableMap.of("error", "id cannot be removed"))
+                    .build()
+            );
+    }
+
+    private void checkIdNotChanged(long id, Member updatedMember) {
+        if (id != updatedMember.getId())
+            throw new WebApplicationException(
+                Response
+                    .status(Response.Status.BAD_REQUEST)
+                    .entity(ImmutableMap.of("error", "id cannot be changed"))
+                    .build()
+                );
     }
 
     private Response.ResponseBuilder validateMemberAndHandleExceptions(Member member) {
