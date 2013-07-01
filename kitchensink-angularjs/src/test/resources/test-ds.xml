@@ -28,9 +28,13 @@
       use-java-context="true">
       <connection-url>jdbc:h2:mem:kitchensink-quickstart-test;DB_CLOSE_DELAY=-1</connection-url>
       <driver>h2</driver>
+       <!--
+      <connection-url>jdbc:postgresql://localhost/mytestdb</connection-url>
+      <driver>postgresql-9.2-1002.jdbc4.jar</driver>
+       -->
       <security>
-         <user-name>sa</user-name>
-         <password>sa</password>
+         <user-name>conftest</user-name>
+         <password>unused</password>
       </security>
    </datasource>
 </datasources>
