@@ -54,8 +54,8 @@ public class OrderColumnTest {
         tester.checkOrder();
         tester.rearrangePages();
         tester.checkOrderHasChanged();
-        tester.rearrangePagesServerSide();
-        tester.checkOrderHasChangedAfterServerSideUpdate();
+        tester.rearrangePagesDatabaseSide();
+        tester.checkOrderHasChangedAfterDatabaseSideUpdate();
     }
 
 }

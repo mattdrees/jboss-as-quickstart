@@ -22,10 +22,9 @@ public class Conference {
     @GeneratedValue
     public Long id;
 
-//    @OneToMany(cascade = CascadeType.ALL, mappedBy = "conference")
     @OneToMany(cascade = CascadeType.ALL)
     @JoinColumn(name = "conference_id", nullable = false)
-    @OrderColumn(nullable = false)
+    @OrderColumn(name = "index", nullable = false)
     public List<Page> pages = new ArrayList<Page>();
 
 }

@@ -55,7 +55,7 @@ public class OrderColumnTester
     }
 
 
-    public void rearrangePagesServerSide() {
+    public void rearrangePagesDatabaseSide() {
         int oldIndex = 2;
         int newIndex = 0;
         movePage(oldIndex, newIndex);
@@ -71,6 +71,7 @@ public class OrderColumnTester
 
         String jpaql = "UPDATE Page page\n" +
             "SET page.pageOrder = \n" +
+            //note: we use (0 + :new) instead of :new because of https://hibernate.atlassian.net/browse/HHH-4700
             "  CASE page.pageOrder WHEN :old THEN (0 + :new)\n" +
             "  ELSE (page.pageOrder + :delta) END\n" +
             "WHERE page.pageOrder BETWEEN :lower AND :upper";
@@ -89,7 +90,7 @@ public class OrderColumnTester
     }
 
 
-    public void checkOrderHasChangedAfterServerSideUpdate() {
+    public void checkOrderHasChangedAfterDatabaseSideUpdate() {
         Conference conference = entityManager.find(Conference.class, id);
         Assert.assertEquals("A", conference.pages.get(0).name);
         Assert.assertEquals("B", conference.pages.get(1).name);
